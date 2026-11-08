@@ -2446,7 +2446,17 @@ impl Interactivity {
                     scroll_offset.y += delta_y;
                     scroll_offset.x += delta_x;
                     if *scroll_offset != old_scroll_offset {
+                        // `notify` only reaches the window when the entity was
+                        // registered during render, which happens when render
+                        // reads another entity. A view that renders purely from
+                        // its own fields never registers, so notify alone left
+                        // the scroll offset applied but unpainted: the wheel
+                        // moved the content and nothing on screen changed until
+                        // some unrelated input forced a frame. A scroll offset
+                        // is a paint-only change, so ask the window for a frame
+                        // directly and keep the notify for observers.
                         cx.notify(current_view);
+                        window.refresh();
                     }
                 }
             });

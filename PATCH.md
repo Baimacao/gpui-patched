@@ -39,7 +39,7 @@ arriving.
 
 ## What changed
 
-Three files, roughly 70 lines.
+Four files, roughly 80 lines.
 
 ### `src/platform/windows/platform.rs`
 
@@ -100,6 +100,26 @@ a key handler that then marks the window dirty left the frame producer waking
 up to a clean window and re-presenting the scene it already had. The visible
 symptom was precise and easy to miss: mouse clicks updated the window, keys
 did not, and the state behind them had already changed correctly.
+
+### `src/elements/div.rs`
+
+A scrollable element now asks the window for a frame after it moves its own
+offset:
+
+```rust
+if *scroll_offset != old_scroll_offset {
+    cx.notify(current_view);
+    window.refresh();
+}
+```
+
+`notify` alone is not enough here. It reaches the window only if the entity was
+registered during render, and that registration happens when render *reads
+another entity* (`record_entities_accessed`). A view that renders purely from
+its own fields never registers, so `notify` went nowhere: the wheel moved the
+scroll offset, the content was correct, and the screen did not change until
+some unrelated input forced a frame. `window.refresh()` is the paint-level
+request, which is what a scroll actually needs.
 
 ## Verifying it still draws
 
