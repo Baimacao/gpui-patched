@@ -3771,6 +3771,13 @@ impl Window {
     fn dispatch_key_event(&mut self, event: &dyn Any, cx: &mut App) {
         if self.invalidator.is_dirty() {
             self.draw(cx).clear();
+            // The pre-dispatch draw above produces a fresh scene, and `draw`
+            // clears the dirty flag. Without presenting it here the pixels stay
+            // one frame behind whatever the key handler then does: the handler
+            // marks the window dirty again, the frame producer wakes, sees a
+            // clean window, and only re-presents the scene it already had.
+            // Presenting closes that gap and costs nothing when nothing moved.
+            self.present();
         }
 
         let node_id = self.focus_node_id_in_rendered_frame(self.focus);

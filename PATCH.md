@@ -39,7 +39,7 @@ arriving.
 
 ## What changed
 
-Three files, roughly 60 lines.
+Three files, roughly 70 lines.
 
 ### `src/platform/windows/platform.rs`
 
@@ -94,6 +94,13 @@ The ordering matters and was a real bug during development: waking first let
 the producer run, observe `is_dirty() == false`, present nothing, and park
 again with the redraw still owed.
 
+`dispatch_key_event` also presents the scene it draws before handing the key
+over. That path draws without presenting, and `draw` clears the dirty flag, so
+a key handler that then marks the window dirty left the frame producer waking
+up to a clean window and re-presenting the scene it already had. The visible
+symptom was precise and easy to miss: mouse clicks updated the window, keys
+did not, and the state behind them had already changed correctly.
+
 ## Verifying it still draws
 
 An idle CPU of 0.00 % is indistinguishable from a dead window by measurement
@@ -108,6 +115,21 @@ RedrawWindow ok=true
 ```
 
 The window reports `Responding = True` throughout and repaints on resize.
+
+Keyboard-driven changes were verified the same way, by driving a real window
+and reading pixels back from the screen rather than from the window: capture,
+press `Tab`, capture, press `Space`, capture. Each capture must differ. That
+harness is what caught the key-dispatch bug above — the application state and
+the render output were both correct, and only the pixels disagreed.
+
+Two measurement traps worth knowing about:
+
+* `PrintWindow` returns the last scene that was *presented through GDI*, not
+  what a flip-model swap chain is showing, so it can return a stale frame that
+  looks like a rendering failure. Read from the screen instead.
+* Cargo keys a git dependency's fingerprint by revision, so editing a checkout
+  under `~/.cargo/git/checkouts/...` does not trigger a rebuild. To instrument
+  this crate, point the dependant at a `path` dependency.
 
 Note that `Context::notify()` does **not** mark a window dirty — it only tells
 observers an entity changed. A probe that calls `notify()` and expects a
